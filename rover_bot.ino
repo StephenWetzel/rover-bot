@@ -68,7 +68,8 @@
 #define LEFT_MOTOR_POS         7
 #define LEFT_MOTOR_NEG         8
 
-const int DISTANCE_TO_TURN = 35; //cm
+const int DISTANCE_TO_TURN = 25; //cm
+const int DISTANCE_TO_VEER = 80; //cm
 
 void setup(){
   delay(1000);
@@ -76,43 +77,98 @@ void setup(){
   Serial.println("Motor test");
   pinMode(ULTRASONIC_TRIG,  OUTPUT);
   pinMode(ULTRASONIC_ECHO,  INPUT);
-  pinMode(RIGHT_MOTOR_EN,       OUTPUT);
-  pinMode(RIGHT_MOTOR_POS,      OUTPUT);
-  pinMode(RIGHT_MOTOR_NEG,      OUTPUT);
-  pinMode(LEFT_MOTOR_EN,       OUTPUT);
-  pinMode(LEFT_MOTOR_POS,      OUTPUT);
-  pinMode(LEFT_MOTOR_NEG,      OUTPUT);
+  pinMode(RIGHT_MOTOR_EN,   OUTPUT);
+  pinMode(RIGHT_MOTOR_POS,  OUTPUT);
+  pinMode(RIGHT_MOTOR_NEG,  OUTPUT);
+  pinMode(LEFT_MOTOR_EN,    OUTPUT);
+  pinMode(LEFT_MOTOR_POS,   OUTPUT);
+  pinMode(LEFT_MOTOR_NEG,   OUTPUT);
   roverSpeed(150);
   roverStop();
 }
 
 
 void loop(){
+  // speedTest();
   long distance;
   static int reroute_count = 0;
   distance = getUltrasonicDistance();
-  if (distance < DISTANCE_TO_TURN){
-    if (reroute_count > 3) {
-      Serial.println((String)"Can't avoid obstacle, trying something different");
-      roverReverse();
-      delay(2000);
-      roverLeft();
-      delay(500);
-    }
-    roverReverse();
-    delay(200);
-    roverRight();
-    delay(200);
+  Serial.println((String)"Distance from rover is " + distance + " CM");
+  if (distance < DISTANCE_TO_TURN) {
+    avoidObstacle(reroute_count);
     reroute_count++;
-    Serial.println((String)"Distance from rover is " + distance + " CM");
+  } else if (distance < DISTANCE_TO_VEER) {
+    approachingObstacle();
   } else {
     reroute_count = 0;
+    roverMed();
     roverForward();
     Serial.println("No obstacle detected.  Going forward");
     delay(15);
   }
 }
 
+void avoidObstacle(int reroute_count) {
+  roverSlow();
+  if (reroute_count > 10) {
+    avoidProtocol3();
+  } else if (reroute_count > 3) {
+    avoidProtocol2();
+  } else {
+    avoidProtocol1();
+  }
+}
+
+void avoidProtocol1() {
+  long distance;
+  int turn_count = 0;
+  Serial.println((String)"Implementing avoid protocol 1");
+  roverReverse();
+  delay(150);
+
+  distance = getUltrasonicDistance();
+  while (turn_count < 25 && distance < DISTANCE_TO_TURN) {
+    turn_count++;
+    roverRight();
+    delay(100);
+    distance = getUltrasonicDistance();
+  }
+}
+
+void avoidProtocol2() {
+  Serial.println((String)"Implementing avoid protocol 2");
+  roverReverse();
+  delay(2000);
+  roverLeft();
+  delay(500);
+}
+
+void avoidProtocol3() {
+  Serial.println((String)"Implementing avoid protocol 3");
+  roverReverse();
+  delay(2000);
+  roverLeft();
+  delay(500);
+  roverRight();
+  delay(500);
+  roverLeft();
+  delay(500);
+  roverRight();
+  delay(500);
+
+  roverFast();
+  roverLeft();
+  delay(500);
+  roverRight();
+  delay(500);
+  roverReverse();
+  delay(2000);
+}
+
+void approachingObstacle() {
+  roverVeerRight();
+  delay(15);
+}
 
 void roverSpeed(int speed){
   analogWrite(RIGHT_MOTOR_EN, speed);
@@ -136,60 +192,128 @@ long getUltrasonicDistance(){
   return distance;
 }
 
-void right_forward(){
+// individual right motor controls:
+void rightSlow() {
+  analogWrite(RIGHT_MOTOR_EN, 110);
+}
+
+void rightMed() {
+  analogWrite(RIGHT_MOTOR_EN, 180);
+}
+
+void rightFast() {
+  analogWrite(RIGHT_MOTOR_EN, 255);
+}
+
+void rightForward(){
   digitalWrite(RIGHT_MOTOR_POS, HIGH);
   digitalWrite(RIGHT_MOTOR_NEG, LOW);
 }
 
-void right_stop(){
+void rightStop(){
   digitalWrite(RIGHT_MOTOR_POS, LOW);
   digitalWrite(RIGHT_MOTOR_NEG, LOW);
 }
 
-void right_backwards(){
+void rightBackwards(){
   digitalWrite(RIGHT_MOTOR_POS, LOW);
   digitalWrite(RIGHT_MOTOR_NEG, HIGH);
 }
 
-void left_forward(){
+// individual left motor controls:
+void leftSlow() {
+  analogWrite(LEFT_MOTOR_EN, 110);
+}
+
+void leftMed() {
+  analogWrite(LEFT_MOTOR_EN, 180);
+}
+
+void leftFast() {
+  analogWrite(LEFT_MOTOR_EN, 255);
+}
+
+void leftForward(){
   digitalWrite(LEFT_MOTOR_POS, HIGH);
   digitalWrite(LEFT_MOTOR_NEG, LOW);
 }
 
-void left_stop(){
+void leftStop(){
   digitalWrite(LEFT_MOTOR_POS, LOW);
   digitalWrite(LEFT_MOTOR_NEG, LOW);
 }
 
-void left_backwards(){
+void leftBackwards(){
   digitalWrite(LEFT_MOTOR_POS, LOW);
   digitalWrite(LEFT_MOTOR_NEG, HIGH);
 }
 
-
+// overall rover controls:
 void roverForward(){
-  right_forward();
-  left_forward();
+  rightForward();
+  leftForward();
 }
 
 void roverRight(){
-  right_forward();
-  left_backwards();
+  rightForward();
+  leftBackwards();
 }
 
 void roverLeft(){
-  right_backwards();
-  left_forward();
+  rightBackwards();
+  leftForward();
 }
 
 void roverReverse(){
-  right_backwards();
-  left_backwards();
+  rightBackwards();
+  leftBackwards();
 }
 
 void roverStop(){
-  left_stop();
-  right_stop();
+  leftStop();
+  rightStop();
+}
+
+void roverVeerRight() {
+  rightFast();
+  leftSlow();
+  roverForward();
+}
+
+void roverVeerLeft() {
+  rightSlow();
+  leftFast();
+  roverForward();
+}
+
+void roverSlow() {
+  rightSlow();
+  leftSlow();
+  roverForward();
+}
+
+void roverMed() {
+  rightMed();
+  leftMed();
+  roverForward();
+}
+
+void roverFast() {
+  rightSlow();
+  leftSlow();
+  roverForward();
 }
 
 
+
+void speedTest() {
+  for (int ii = 0; ii <= 255; ii++) {
+    Serial.println((String)"Speed is " + ii);
+    analogWrite(RIGHT_MOTOR_EN, ii);
+    analogWrite(LEFT_MOTOR_EN, ii);
+    roverForward();
+    delay(100);
+    // 82 left
+    //109 right
+  }
+}
